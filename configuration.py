@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 BASE_DIR = Path.cwd()
 load_dotenv(BASE_DIR / ".env")
 
+print(BASE_DIR)
+
 
 def path_to(*parts: str) -> Path:
     all_parts = [*parts]

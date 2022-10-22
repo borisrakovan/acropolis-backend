@@ -2,6 +2,7 @@ import json
 import logging
 from datetime import datetime
 from decimal import Decimal
+from pprint import pprint
 from typing import Any, Literal
 import numpy as np
 import requests
@@ -23,10 +24,11 @@ class WeatherServerError(Exception):
 
 
 TOTAL_ACC_PRECIPITATION_COLLECTION = {
-    "pressure_gnd-surf": "single-layer", # (Pa)
-    "total-precipitation_gnd-surf_stat": "single-layer", # kg/m²"
+    "pressure_gnd-surf": "single-layer",  # (Pa)
+    # Total precipitation - Ground surface - Accumulation 0h
+    "total-precipitation_gnd-surf_stat": "single-layer",  # kg/m²"
     "total-precipitation_gnd-surf_stat:acc/PT1H": "single-layer_3",
-    "total-precipitation_gnd-surf_stat:acc/PT0S": "single-layer_2", # Total precipitation - Ground surface - Accumulation 0h
+    "total-precipitation_gnd-surf_stat:acc/PT0S": "single-layer_2",
     "total-precipitation_gnd-surf_stat:acc/PT2H": "single-layer_4",
     "total-precipitation_gnd-surf_stat:acc/PT3H": "single-layer_5",
     "total-precipitation_gnd-surf_stat:acc/PT4H": "single-layer_6",
@@ -49,31 +51,28 @@ class EDRWeatherClient:
         long: Decimal,
         dtime: datetime | None = None,
         metric: MetricType,
-        collection: str = "height-above-ground",
+        collection: str,
         query_type: Literal["radius"] | Literal["position"] = "radius",
-        query_params: dict[str, Any] | None = None
+        query_params: dict[str, Any] | None = None,
+        time_interval: tuple[datetime, datetime] = None
     ) -> np.ndarray:
 
         parameter = metric.value.lower()
 
         params = {
             "coords": f"POINT({long} {lat})",
-            "z": 2,
+            # "z": 2,
             "datetime": dtime.isoformat() if dtime else None,
             "parameter-name": parameter,
             "f": "CoverageJSON",
         } | query_params
 
+        url = f"{self._BASE_URL}/collections/{collection}/{query_type}"
+        print(f"Requesting data from URL: {url}\nParameters: {params}")
+
         @file_cache("icon-de", f"collections/{query_type}/{json.dumps(params)}")
         def fetch():
-            url = f"{self._BASE_URL}/collections/{collection}/{query_type}"
             response = requests.get(url, params=params)
-            # base_req = self.api.collections(collection)
-            # resp = getattr(base_req, query_type).get(
-            #     params=params,
-            #     silent=True
-            # )
-            print(url)
 
             if response.status_code == 204:
                 raise NoDataException(f"No data for {str(params)}")
@@ -87,24 +86,36 @@ class EDRWeatherClient:
 
         resp = fetch()
 
+        pprint(resp)
+        # if time_interval is not None:
+
         if resp["type"] == "Coverage":
             # single time slice
             ...
 
-        elif resp["type"] == "CoverageCollection":
-            ...
+        # elif resp["type"] == "CoverageCollection":
+        #     ...
 
         else:
             raise NotImplemented(f"Received coverage {resp['type']}")
         # 2022-10-22T06:00:00Z
         # 2022-10-24T06:00:00Z
 
+        in_time_interval = [
+            time_interval[0] <= datetime.fromisoformat(date_str.strip("Z")) <= time_interval[1]
+            for date_str in resp["domain"]["axes"]["t"]["values"]
+        ]
+
+        if not any(in_time_interval):
+            raise NoDataException(f"No data for given time interval {time_interval}")
+
         parameter_data = resp["ranges"][parameter]
         data = np.array(parameter_data["values"])
+        # (time * area) -> (time, area)
         data = data.reshape(parameter_data["shape"])
 
-        if metric == MetricType.Temperature:
-            data = kelvin_2_celsius(data)
+        # filter data from the desired interval
+        data = data[in_time_interval, ...]
 
         return data
 
@@ -119,10 +130,6 @@ class EDRWeatherClient:
 
         for col in resp["collections"]:
             print(col["id"] + " " + col["title"])
-
-
-def kelvin_2_celsius(k: np.ndarray):
-    return k - 273.15
 
 
 if __name__ == "__main__":
@@ -141,9 +148,3 @@ if __name__ == "__main__":
             "within-units": "km"
         }
     )
-
-
-
-    print(type(resp))
-    print(resp)
-    print()
