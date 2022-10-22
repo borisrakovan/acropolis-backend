@@ -8,6 +8,11 @@ authors = ["Boris Rakovan <boris.rakovan@ataccama.com>"]
 python = "^3.10"
 fastapi = "^0.85.1"
 uvicorn = "^0.19.0"
+alembic = "^1.8.1"
+sqlmodel = "^0.0.8"
+tortilla = "^0.5.0"
+python-dotenv = "^0.21.0"
+numpy = "^1.23.4"
 
 [tool.poetry.dev-dependencies]
 
