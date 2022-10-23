@@ -1,7 +1,5 @@
-import json
-
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, Depends
-from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from api.schemas import ReadMetricsResponse
@@ -11,6 +9,18 @@ from database.models.monitoring_rules import MonitoringRule, MonitoringRuleRead,
 
 app = FastAPI(name="Acropolis API")
 
+origins = [
+    "http://localhost",
+    "http://localhost:3000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.on_event("startup")
 def on_startup():
@@ -32,7 +42,7 @@ async def say_hello(name: str):
     return {"message": f"Hello {name}"}
 
 
-@app.get("/monitoring-rules/", response_model=list[MonitoringRule])
+@app.get("/monitoring-rules/", response_model=list[MonitoringRuleRead])
 async def read_monitoring_rules(
     *, session: Session = Depends(get_session),
 ):
@@ -54,17 +64,11 @@ async def create_monitoring_rule(
     monitoring_rule: MonitoringRuleCreate
 ):
     db_monitoring_rule = MonitoringRule.from_orm(monitoring_rule)
-    area_definition = db_monitoring_rule.area_definition.dict()
-    # db_monitoring_rule.area_definition = {
-    #
-    # }
     db_monitoring_rule.alert_definitions = [
         AlertDefinition.from_orm(alert)
         for alert in monitoring_rule.alert_definitions
     ]
 
-    print(db_monitoring_rule)
-    print(db_monitoring_rule.alert_definitions)
     session.add(db_monitoring_rule)
     session.commit()
     return db_monitoring_rule

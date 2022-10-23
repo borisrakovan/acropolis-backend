@@ -23,20 +23,6 @@ class WeatherServerError(Exception):
     pass
 
 
-TOTAL_ACC_PRECIPITATION_COLLECTION = {
-    "pressure_gnd-surf": "single-layer",  # (Pa)
-    # Total precipitation - Ground surface - Accumulation 0h
-    "total-precipitation_gnd-surf_stat": "single-layer",  # kg/m²"
-    "total-precipitation_gnd-surf_stat:acc/PT1H": "single-layer_3",
-    "total-precipitation_gnd-surf_stat:acc/PT0S": "single-layer_2",
-    "total-precipitation_gnd-surf_stat:acc/PT2H": "single-layer_4",
-    "total-precipitation_gnd-surf_stat:acc/PT3H": "single-layer_5",
-    "total-precipitation_gnd-surf_stat:acc/PT4H": "single-layer_6",
-    "total-precipitation_gnd-surf_stat:acc/PT5H": "single-layer_7",
-    "total-precipitation_gnd-surf_stat:acc/PT6H": "single-layer_8"
-}
-
-
 class EDRWeatherClient:
 
     _BASE_URL = "https://climathon.iblsoft.com/data/icon-de/edr"
@@ -50,20 +36,18 @@ class EDRWeatherClient:
         lat: Decimal,
         long: Decimal,
         dtime: datetime | None = None,
-        metric: MetricType,
+        parameter_name: str,
         collection: str,
         query_type: Literal["radius"] | Literal["position"] = "radius",
         query_params: dict[str, Any] | None = None,
         time_interval: tuple[datetime, datetime] = None
     ) -> np.ndarray:
 
-        parameter = metric.value.lower()
-
         params = {
             "coords": f"POINT({long} {lat})",
             # "z": 2,
             "datetime": dtime.isoformat() if dtime else None,
-            "parameter-name": parameter,
+            "parameter-name": parameter_name,
             "f": "CoverageJSON",
         } | query_params
 
@@ -86,9 +70,6 @@ class EDRWeatherClient:
 
         resp = fetch()
 
-        pprint(resp)
-        # if time_interval is not None:
-
         if resp["type"] == "Coverage":
             # single time slice
             ...
@@ -98,24 +79,24 @@ class EDRWeatherClient:
 
         else:
             raise NotImplemented(f"Received coverage {resp['type']}")
-        # 2022-10-22T06:00:00Z
-        # 2022-10-24T06:00:00Z
 
-        in_time_interval = [
-            time_interval[0] <= datetime.fromisoformat(date_str.strip("Z")) <= time_interval[1]
-            for date_str in resp["domain"]["axes"]["t"]["values"]
-        ]
-
-        if not any(in_time_interval):
-            raise NoDataException(f"No data for given time interval {time_interval}")
-
-        parameter_data = resp["ranges"][parameter]
+        parameter_data = resp["ranges"][parameter_name]
         data = np.array(parameter_data["values"])
+
         # (time * area) -> (time, area)
         data = data.reshape(parameter_data["shape"])
 
         # filter data from the desired interval
-        data = data[in_time_interval, ...]
+        if time_interval is not None:
+            in_time_interval = [
+                time_interval[0] <= datetime.fromisoformat(date_str.strip("Z")) <= time_interval[1]
+                for date_str in resp["domain"]["axes"]["t"]["values"]
+            ]
+
+            if not any(in_time_interval):
+                raise NoDataException(f"No data for given time interval {time_interval}")
+
+            data = data[in_time_interval, ...]
 
         return data
 

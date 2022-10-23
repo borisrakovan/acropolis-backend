@@ -9,13 +9,12 @@ from sqlmodel import Field, SQLModel, Relationship
 
 class MetricType(enum.Enum):
     Temperature = "TEMPERATURE"
-    WindSpeed = "WIND-SPEED"
+    WindSpeed = "WIND-SPEED"  #  m/s
     RelativeHumidity = "RELATIVE-HUMIDITY"
     Precipitation = "PRECIPITATION"
-
-    Pressure = "PRESSURE"
-    SnowDepth = "SNOW-DEPTH"
-    SnowCover = "SNOW-COVER"
+    # Pressure = "PRESSURE"
+    # SnowDepth = "SNOW-DEPTH"
+    # SnowCover = "SNOW-COVER"
     # Wind = "WIND"
     # uhrn zrazok mm
 
@@ -75,6 +74,7 @@ class MonitoringRuleCreate(MonitoringRuleBase):
 class MonitoringRuleRead(MonitoringRuleBase):
     id: int
     alert_definitions: list["AlertDefinitionRead"]
+    alert_triggers: list["AlertTrigger"]
 
 
 class MonitoringRule(MonitoringRuleBase, table=True):

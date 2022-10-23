@@ -8,13 +8,12 @@ from database.models.alerts import AlertTrigger
 from database.models.monitoring_rules import EvaluationMode, \
     LogicalOperator, MetricType
 from database.models.monitoring_runs import MonitoringRun
+from monitoring_service.alerting import send_alert_notifications
 from monitoring_service.weather_client import NoDataException
 from datetime import datetime, timedelta
 
 from database.models.monitoring_rules import MonitoringRule, AreaDefinition, TimeWindowDefinition
 from monitoring_service.evaluation import create_data_provider
-
-
 
 
 def evaluate_monitoring_rule(rule: MonitoringRule, data: np.ndarray) -> AlertTrigger | None:
@@ -97,9 +96,10 @@ def run_monitoring_flow() -> MonitoringRun:
         session.commit()
         session.refresh(monitoring_run)
 
-        stmt = select(MonitoringRule).where(MonitoringRule.metric == MetricType.WindSpeed)
+        stmt = select(MonitoringRule)
         monitoring_rules = session.exec(stmt).all()
         print(monitoring_rules)
+        triggers = []
         for rule in monitoring_rules:
             # evaluate the current rule
             print(f"Evaluating rule {rule.title}")
@@ -117,11 +117,12 @@ def run_monitoring_flow() -> MonitoringRun:
                 trigger.monitoring_run = monitoring_run
                 session.add(trigger)
                 session.commit()
+                triggers.append(trigger)
+
+        send_alert_notifications(triggers)
 
         monitoring_run.finished_at = datetime.now()
         session.add(monitoring_run)
         session.commit()
 
         return monitoring_run
-
-
